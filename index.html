@@ -1,0 +1,586 @@
+<style>
+  :root{
+    --bg:#15171b; --panel:#1d2026; --panel2:#23262e; --line:#2c3038;
+    --ink:#eceef2; --ink-dim:#9aa0ac; --accent:#6ee7d0; --accent-dim:#2d4a44;
+    --warn:#f2b155; --danger:#f26d6d; --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Noto Sans TC','PingFang TC','Microsoft JhengHei',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);}
+  .wrap{max-width:960px;margin:0 auto;padding:20px 16px 60px;}
+  h1{font-size:20px;font-weight:700;letter-spacing:-0.01em;margin:0 0 2px;}
+  .sub{color:var(--ink-dim);font-size:13px;margin:0 0 20px;}
+  .toprow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px;}
+  select, input, textarea, button{
+    font-family:inherit;background:var(--panel2);color:var(--ink);
+    border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;
+  }
+  select{min-width:160px;}
+  button{cursor:pointer;background:var(--panel2);transition:border-color .15s;}
+  button:hover{border-color:var(--accent);}
+  button.primary{background:var(--accent);color:#0c1210;border-color:var(--accent);font-weight:600;}
+  button.danger{color:var(--danger);}
+  button.small{padding:4px 8px;font-size:12px;}
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px;}
+  .tab{padding:9px 14px;font-size:13px;color:var(--ink-dim);cursor:pointer;border-bottom:2px solid transparent;}
+  .tab.active{color:var(--ink);border-color:var(--accent);}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:14px;}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  @media(max-width:640px){.grid3{grid-template-columns:1fr;}}
+  .quota-card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px;}
+  .quota-card .label{font-size:12px;color:var(--ink-dim);letter-spacing:.04em;margin-bottom:6px;}
+  .quota-card .nums{font-size:22px;font-weight:700;}
+  .quota-card .nums span{font-size:13px;color:var(--ink-dim);font-weight:400;}
+  .bar{height:6px;border-radius:4px;background:var(--line);margin-top:8px;overflow:hidden;}
+  .bar > div{height:100%;background:var(--accent);}
+  .bar.over > div{background:var(--danger);}
+  .qctrl{display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap;}
+  .qctrl input{width:56px;padding:4px 6px;text-align:center;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  th{text-align:left;color:var(--ink-dim);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap;}
+  td{padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap;}
+  .status-pill{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;}
+  .status-launched{background:#1f3d2e;color:#7fe0a3;}
+  .status-scheduled{background:#3a3420;color:#f2c866;}
+  .status-ended{background:#33262b;color:#d98a8a;}
+  .row-actions{display:flex;gap:4px;}
+  .empty{color:var(--ink-dim);font-size:13px;padding:20px;text-align:center;}
+  .field-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px;}
+  @media(max-width:640px){.field-row{grid-template-columns:repeat(2,1fr);}}
+  .field-row label{font-size:11px;color:var(--ink-dim);display:block;margin-bottom:3px;}
+  .field-row input, .field-row select{width:100%;}
+  .section-label{font-size:12px;color:var(--accent);font-weight:600;margin:12px 0 8px;text-transform:uppercase;letter-spacing:.04em;}
+  textarea.json{width:100%;height:180px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;}
+  .schema{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:var(--ink-dim);white-space:pre;overflow-x:auto;}
+  .msg{font-size:12.5px;padding:8px 10px;border-radius:6px;margin-top:8px;}
+  .msg.ok{background:#1f3d2e;color:#7fe0a3;}
+  .msg.err{background:#3d2020;color:#f29a9a;}
+  .footer-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .totals{font-size:12px;color:var(--ink-dim);margin-top:4px;}
+  .lockwrap{max-width:360px;margin:80px auto;text-align:center;}
+  .lockwrap input{width:100%;margin:12px 0;text-align:center;font-size:16px;letter-spacing:2px;}
+  .client-card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:12px;}
+  .client-card h3{margin:0 0 6px;font-size:15px;}
+  .kv{display:grid;grid-template-columns:repeat(2,1fr);gap:4px 16px;font-size:12.5px;color:var(--ink-dim);margin-top:8px;}
+  .kv b{color:var(--ink);font-weight:600;}
+  .sharebox{display:flex;gap:6px;margin-top:8px;}
+  .sharebox input{flex:1;font-size:11px;}
+</style>
+
+<div id="root"></div>
+
+<script>
+const TYPES = ['static','carousel','reels'];
+const TYPE_LABEL = {static:'靜態圖', carousel:'輪播圖', reels:'Reels / 影片'};
+const STATUS_LABEL = {Scheduled:'排程中', Launched:'已上線', Ended:'已結束'};
+let clients = [];
+let currentId = null;
+let currentData = null;
+
+const params = new URLSearchParams(location.search);
+const isClientView = params.get('view') === 'client';
+const clientViewId = params.get('id');
+
+function uid(){ return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+function emptyClientData(name){
+  return {
+    name,
+    quota: {
+      static:   {signed:0, used:0},
+      carousel: {signed:0, used:0},
+      reels:    {signed:0, used:0}
+    },
+    ads: []
+  };
+}
+function emptyTargeting(){
+  return { age:'', gender:'不限', location:'', interests:'', placement:'' };
+}
+
+/* ---------- storage (shared, so client links can read it) ---------- */
+async function loadIndex(){
+  try{ const r = await window.storage.get('clients-index', true); return r ? JSON.parse(r.value) : []; }
+  catch(e){ return []; }
+}
+async function saveIndex(){ await window.storage.set('clients-index', JSON.stringify(clients), true); }
+async function loadClient(id){
+  try{ const r = await window.storage.get('client:'+id, true); return r ? JSON.parse(r.value) : null; }
+  catch(e){ return null; }
+}
+async function saveClient(id, data){ await window.storage.set('client:'+id, JSON.stringify(data), true); }
+async function deleteClientStorage(id){ try{ await window.storage.delete('client:'+id, true); }catch(e){} }
+async function getPasscode(){
+  try{ const r = await window.storage.get('admin-passcode', true); return r ? r.value : null; }
+  catch(e){ return null; }
+}
+async function setPasscode(v){ await window.storage.set('admin-passcode', v, true); }
+
+/* ================= CLIENT (READ-ONLY, PUBLIC) VIEW ================= */
+async function renderClientView(){
+  const root = document.getElementById('root');
+  if(!clientViewId){
+    root.innerHTML = '<div class="wrap"><div class="empty">連結無效，缺少客戶編號。</div></div>';
+    return;
+  }
+  const data = await loadClient(clientViewId);
+  if(!data){
+    root.innerHTML = '<div class="wrap"><div class="empty">找不到相關客戶資料，連結可能已失效。</div></div>';
+    return;
+  }
+  const quotaCards = TYPES.map(t=>{
+    const q = data.quota[t];
+    const remaining = q.signed - q.used;
+    const pct = q.signed>0 ? Math.min(100,(q.used/q.signed)*100) : 0;
+    return `<div class="quota-card">
+      <div class="label">${TYPE_LABEL[t]}</div>
+      <div class="nums">${remaining} <span>剩餘 / 共 ${q.signed}</span></div>
+      <div class="bar ${remaining<0?'over':''}"><div style="width:${pct}%"></div></div>
+      <div class="totals">已使用 ${q.used} / 已簽 ${q.signed}</div>
+    </div>`;
+  }).join('');
+
+  const ads = data.ads || [];
+  const adCards = ads.length ? ads.map(a=>{
+    const ctr = (a.clicks && a.reach) ? ((a.clicks/a.reach)*100).toFixed(2)+'%' : '—';
+    const tg = a.targeting || {};
+    return `<div class="client-card">
+      <h3>${escapeHtml(a.name)} <span class="status-pill status-${a.status==='Launched'?'launched':a.status==='Scheduled'?'scheduled':'ended'}">${STATUS_LABEL[a.status]||a.status}</span></h3>
+      <div class="kv">
+        <div>投放期間：<b>${a.startDate||'—'} → ${a.endDate||'—'}</b></div>
+        <div>預算：<b>HK$${(+a.budgetHKD||0).toLocaleString()}</b></div>
+        <div>已花費：<b>HK$${(+a.spendHKD||0).toLocaleString()}</b></div>
+        <div>觸及人數：<b>${(+a.reach||0).toLocaleString()}</b></div>
+        <div>點擊次數：<b>${(+a.clicks||0).toLocaleString()}</b></div>
+        <div>點擊率 (CTR)：<b>${ctr}</b></div>
+      </div>
+      <div class="section-label" style="margin-top:10px">目標受眾設定</div>
+      <div class="kv">
+        <div>年齡層：<b>${escapeHtml(tg.age)||'—'}</b></div>
+        <div>性別：<b>${escapeHtml(tg.gender)||'—'}</b></div>
+        <div>地區：<b>${escapeHtml(tg.location)||'—'}</b></div>
+        <div>版位：<b>${escapeHtml(tg.placement)||'—'}</b></div>
+        <div style="grid-column:1/-1">興趣 / 受眾特徵：<b>${escapeHtml(tg.interests)||'—'}</b></div>
+      </div>
+      ${a.notes ? `<div style="margin-top:8px;font-size:12.5px;color:var(--ink-dim)">備註：${escapeHtml(a.notes)}</div>` : ''}
+    </div>`;
+  }).join('') : '<div class="empty">暫時未有廣告投放記錄。</div>';
+
+  root.innerHTML = `
+    <div class="wrap">
+      <h1>${escapeHtml(data.name)} — 貼文與廣告進度</h1>
+      <p class="sub">最後更新資料由服務方提供，僅供參考</p>
+      <div class="panel">
+        <div class="section-label" style="margin-top:0">貼文名額</div>
+        <div class="grid3">${quotaCards}</div>
+      </div>
+      <div class="section-label">Meta 廣告投放</div>
+      ${adCards}
+    </div>
+  `;
+}
+
+/* ================= ADMIN VIEW ================= */
+function adminShell(){
+  document.getElementById('root').innerHTML = `
+    <div class="wrap">
+      <h1>客戶管理後台</h1>
+      <p class="sub" id="subhead">載入中…</p>
+      <div class="toprow">
+        <select id="clientSelect"></select>
+        <button id="newClientBtn">＋ 新增客戶</button>
+        <button id="renameClientBtn">重新命名</button>
+        <button id="deleteClientBtn" class="danger">刪除</button>
+        <button id="shareBtn">分享客戶連結</button>
+      </div>
+      <div id="shareBoxHolder"></div>
+      <div id="app" style="display:none">
+        <div class="tabs">
+          <div class="tab active" data-tab="quota">貼文名額</div>
+          <div class="tab" data-tab="ads">Meta 廣告</div>
+          <div class="tab" data-tab="sync">匯入 / 匯出</div>
+        </div>
+        <div id="tab-quota" class="tabpanel"></div>
+        <div id="tab-ads" class="tabpanel" style="display:none"></div>
+        <div id="tab-sync" class="tabpanel" style="display:none"></div>
+      </div>
+      <div id="noClient" class="empty">未有客戶資料，請按「＋ 新增客戶」開始。</div>
+    </div>
+  `;
+
+  document.getElementById('clientSelect').addEventListener('change', e => selectClient(e.target.value));
+  document.getElementById('newClientBtn').addEventListener('click', async () => {
+    const name = prompt('客戶名稱：');
+    if(!name) return;
+    const id = uid();
+    clients.push({id, name});
+    await saveIndex();
+    await saveClient(id, emptyClientData(name));
+    await selectClient(id);
+  });
+  document.getElementById('renameClientBtn').addEventListener('click', async () => {
+    if(!currentId) return;
+    const name = prompt('新名稱：', currentData.name);
+    if(!name) return;
+    currentData.name = name;
+    const c = clients.find(c=>c.id===currentId);
+    if(c) c.name = name;
+    await saveIndex();
+    await saveClient(currentId, currentData);
+    await selectClient(currentId);
+  });
+  document.getElementById('deleteClientBtn').addEventListener('click', async () => {
+    if(!currentId) return;
+    if(!confirm(`確定刪除客戶「${currentData.name}」？此動作無法還原。`)) return;
+    await deleteClientStorage(currentId);
+    clients = clients.filter(c => c.id !== currentId);
+    await saveIndex();
+    currentId = null; currentData = null;
+    if(clients.length) await selectClient(clients[0].id);
+    else {
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('noClient').style.display = 'block';
+      document.getElementById('subhead').textContent = '未有客戶資料。';
+    }
+  });
+  document.getElementById('shareBtn').addEventListener('click', () => {
+    if(!currentId) return;
+    const base = location.origin + location.pathname;
+    const link = base + '?view=client&id=' + currentId;
+    const holder = document.getElementById('shareBoxHolder');
+    holder.innerHTML = `<div class="panel"><div class="sharebox">
+      <input id="shareLinkInput" readonly value="${escapeHtml(link)}">
+      <button id="copyShareBtn">複製連結</button>
+    </div><p style="font-size:11.5px;color:var(--ink-dim);margin:8px 0 0">呢個連結只顯示「${escapeHtml(currentData.name)}」嘅資料，可以直接畀客戶睇（唔會見到其他客戶）。</p></div>`;
+    document.getElementById('shareLinkInput').select();
+    document.getElementById('copyShareBtn').addEventListener('click', () => {
+      const inp = document.getElementById('shareLinkInput');
+      inp.select();
+      try{ navigator.clipboard.writeText(inp.value); }catch(e){ document.execCommand('copy'); }
+    });
+  });
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+      document.querySelectorAll('.tabpanel').forEach(p=>p.style.display='none');
+      document.getElementById('tab-'+t.dataset.tab).style.display='block';
+    });
+  });
+}
+
+function renderClientSelect(){
+  const sel = document.getElementById('clientSelect');
+  sel.innerHTML = clients.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  if(currentId) sel.value = currentId;
+}
+
+async function selectClient(id){
+  currentId = id;
+  currentData = await loadClient(id);
+  if(!currentData){
+    currentData = emptyClientData(clients.find(c=>c.id===id)?.name || '未命名客戶');
+    await saveClient(id, currentData);
+  }
+  document.getElementById('shareBoxHolder').innerHTML = '';
+  document.getElementById('app').style.display = clients.length ? 'block' : 'none';
+  document.getElementById('noClient').style.display = clients.length ? 'none' : 'block';
+  document.getElementById('subhead').textContent = clients.length ? `正在編輯：${currentData.name}` : '未有客戶資料。';
+  renderClientSelect();
+  renderQuotaTab();
+  renderAdsTab();
+  renderSyncTab();
+}
+
+async function initAdmin(){
+  adminShell();
+  clients = await loadIndex();
+  renderClientSelect();
+  if(clients.length){ await selectClient(clients[0].id); }
+  else{
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('noClient').style.display = 'block';
+    document.getElementById('subhead').textContent = '未有客戶資料。';
+  }
+}
+
+/* ---------- QUOTA TAB ---------- */
+function renderQuotaTab(){
+  const el = document.getElementById('tab-quota');
+  const cards = TYPES.map(t => {
+    const q = currentData.quota[t];
+    const remaining = q.signed - q.used;
+    const pct = q.signed > 0 ? Math.min(100, (q.used/q.signed)*100) : 0;
+    const over = remaining < 0;
+    return `
+      <div class="quota-card">
+        <div class="label">${TYPE_LABEL[t]}</div>
+        <div class="nums">${remaining} <span>剩餘 / 共 ${q.signed}</span></div>
+        <div class="bar ${over?'over':''}"><div style="width:${pct}%"></div></div>
+        <div class="totals">已使用 ${q.used} / 已簽 ${q.signed}</div>
+        <div class="qctrl">
+          <span style="font-size:11px;color:var(--ink-dim)">已簽</span>
+          <input type="number" min="0" value="${q.signed}" data-type="${t}" data-field="signed">
+          <span style="font-size:11px;color:var(--ink-dim)">已用</span>
+          <input type="number" min="0" value="${q.used}" data-type="${t}" data-field="used">
+        </div>
+      </div>`;
+  }).join('');
+  el.innerHTML = `<div class="panel"><div class="grid3">${cards}</div></div>`;
+  el.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('change', async () => {
+      const t = inp.dataset.type, f = inp.dataset.field;
+      currentData.quota[t][f] = Math.max(0, parseInt(inp.value)||0);
+      await saveClient(currentId, currentData);
+      renderQuotaTab();
+    });
+  });
+}
+
+/* ---------- ADS TAB ---------- */
+function statusPillClass(s){
+  if(s==='Launched') return 'status-launched';
+  if(s==='Scheduled') return 'status-scheduled';
+  return 'status-ended';
+}
+function renderAdsTab(){
+  const el = document.getElementById('tab-ads');
+  const ads = currentData.ads || [];
+  const totalBudget = ads.reduce((s,a)=>s+(+a.budgetHKD||0),0);
+  const totalSpend = ads.reduce((s,a)=>s+(+a.spendHKD||0),0);
+  const rows = ads.map(a => {
+    const ctr = (a.clicks && a.reach) ? ((a.clicks/a.reach)*100).toFixed(2)+'%' : '—';
+    const tg = a.targeting || {};
+    const tgSummary = [tg.age, tg.gender, tg.location].filter(Boolean).join(' / ') || '—';
+    return `<tr>
+      <td>${escapeHtml(a.name)}</td>
+      <td><span class="status-pill ${statusPillClass(a.status)}">${STATUS_LABEL[a.status]||a.status}</span></td>
+      <td>${a.startDate||'—'} → ${a.endDate||'—'}</td>
+      <td>HK$${(+a.budgetHKD||0).toLocaleString()}</td>
+      <td>HK$${(+a.spendHKD||0).toLocaleString()}</td>
+      <td>${(+a.reach||0).toLocaleString()}</td>
+      <td>${(+a.clicks||0).toLocaleString()}</td>
+      <td>${ctr}</td>
+      <td>${escapeHtml(tgSummary)}</td>
+      <td class="row-actions">
+        <button class="small" data-edit="${a.id}">編輯</button>
+        <button class="small danger" data-del="${a.id}">刪除</button>
+      </td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="panel">
+      <div class="footer-actions" style="margin-top:0;margin-bottom:12px;">
+        <button class="primary" id="addAdBtn">＋ 新增廣告</button>
+        <span class="totals" style="align-self:center">總預算：HK$${totalBudget.toLocaleString()} · 總花費：HK$${totalSpend.toLocaleString()}</span>
+      </div>
+      ${ads.length ? `<table>
+        <tr><th>廣告名稱</th><th>狀態</th><th>日期</th><th>預算</th><th>花費</th><th>觸及</th><th>點擊</th><th>CTR</th><th>目標受眾</th><th></th></tr>
+        ${rows}
+      </table>` : '<div class="empty">未有廣告記錄。</div>'}
+    </div>
+    <div id="adFormHolder"></div>
+  `;
+  document.getElementById('addAdBtn').addEventListener('click', () => showAdForm(null));
+  el.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => showAdForm(b.dataset.edit)));
+  el.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
+    if(!confirm('確定刪除呢個廣告？')) return;
+    currentData.ads = currentData.ads.filter(a => a.id !== b.dataset.del);
+    await saveClient(currentId, currentData);
+    renderAdsTab();
+  }));
+}
+
+function showAdForm(adId){
+  const ad = adId ? currentData.ads.find(a=>a.id===adId) : {
+    id: uid(), name:'', status:'Scheduled', startDate:'', endDate:'',
+    budgetHKD:0, spendHKD:0, reach:0, clicks:0, notes:'', targeting: emptyTargeting()
+  };
+  if(!ad.targeting) ad.targeting = emptyTargeting();
+  const tg = ad.targeting;
+  const holder = document.getElementById('adFormHolder');
+  holder.innerHTML = `
+    <div class="panel">
+      <div class="section-label" style="margin-top:0">廣告基本資料</div>
+      <div class="field-row">
+        <div><label>廣告名稱</label><input id="f_name" value="${escapeHtml(ad.name)}"></div>
+        <div><label>狀態</label>
+          <select id="f_status">
+            ${['Scheduled','Launched','Ended'].map(s=>`<option value="${s}" ${ad.status===s?'selected':''}>${STATUS_LABEL[s]}</option>`).join('')}
+          </select>
+        </div>
+        <div><label>開始日期</label><input type="date" id="f_start" value="${ad.startDate||''}"></div>
+        <div><label>結束日期</label><input type="date" id="f_end" value="${ad.endDate||''}"></div>
+      </div>
+      <div class="field-row">
+        <div><label>預算 (HK$)</label><input type="number" id="f_budget" value="${ad.budgetHKD||0}"></div>
+        <div><label>已花費 (HK$)</label><input type="number" id="f_spend" value="${ad.spendHKD||0}"></div>
+        <div><label>觸及人數</label><input type="number" id="f_reach" value="${ad.reach||0}"></div>
+        <div><label>點擊次數</label><input type="number" id="f_clicks" value="${ad.clicks||0}"></div>
+      </div>
+
+      <div class="section-label">目標受眾設定</div>
+      <div class="field-row">
+        <div><label>年齡層</label><input id="f_tg_age" placeholder="例：25-45歲" value="${escapeHtml(tg.age)}"></div>
+        <div><label>性別</label>
+          <select id="f_tg_gender">
+            ${['不限','女性','男性'].map(g=>`<option ${tg.gender===g?'selected':''}>${g}</option>`).join('')}
+          </select>
+        </div>
+        <div><label>地區</label><input id="f_tg_location" placeholder="例：香港島" value="${escapeHtml(tg.location)}"></div>
+        <div><label>版位</label><input id="f_tg_placement" placeholder="例：IG限時動態+摡文" value="${escapeHtml(tg.placement)}"></div>
+      </div>
+      <div style="margin-bottom:8px">
+        <label style="font-size:11px;color:var(--ink-dim)">興趣 / 受眾特徵</label>
+        <input id="f_tg_interests" style="width:100%" placeholder="例：美容護膚、醫美療程、抗老保養" value="${escapeHtml(tg.interests)}">
+      </div>
+
+      <div style="margin-bottom:8px">
+        <label style="font-size:11px;color:var(--ink-dim)">備註</label>
+        <input id="f_notes" style="width:100%" value="${escapeHtml(ad.notes||'')}">
+      </div>
+      <div class="footer-actions">
+        <button class="primary" id="saveAdBtn">儲存廣告</button>
+        <button id="cancelAdBtn">取消</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('cancelAdBtn').addEventListener('click', () => holder.innerHTML='');
+  document.getElementById('saveAdBtn').addEventListener('click', async () => {
+    ad.name = document.getElementById('f_name').value.trim() || '未命名廣告';
+    ad.status = document.getElementById('f_status').value;
+    ad.startDate = document.getElementById('f_start').value;
+    ad.endDate = document.getElementById('f_end').value;
+    ad.budgetHKD = +document.getElementById('f_budget').value || 0;
+    ad.spendHKD = +document.getElementById('f_spend').value || 0;
+    ad.reach = +document.getElementById('f_reach').value || 0;
+    ad.clicks = +document.getElementById('f_clicks').value || 0;
+    ad.notes = document.getElementById('f_notes').value;
+    ad.targeting = {
+      age: document.getElementById('f_tg_age').value,
+      gender: document.getElementById('f_tg_gender').value,
+      location: document.getElementById('f_tg_location').value,
+      placement: document.getElementById('f_tg_placement').value,
+      interests: document.getElementById('f_tg_interests').value
+    };
+    currentData.ads = currentData.ads || [];
+    const idx = currentData.ads.findIndex(a=>a.id===ad.id);
+    if(idx>=0) currentData.ads[idx]=ad; else currentData.ads.push(ad);
+    await saveClient(currentId, currentData);
+    holder.innerHTML='';
+    renderAdsTab();
+  });
+}
+
+/* ---------- SYNC TAB ---------- */
+function renderSyncTab(){
+  const el = document.getElementById('tab-sync');
+  const schema = `{
+  "name": "客戶名稱",
+  "quota": {
+    "static":   { "signed": 10, "used": 4 },
+    "carousel": { "signed": 6,  "used": 2 },
+    "reels":    { "signed": 4,  "used": 1 }
+  },
+  "ads": [
+    {
+      "id": "如果係更新現有廣告，保留原本id；新廣告可以唔寫",
+      "name": "八月推廣",
+      "status": "Launched",
+      "startDate": "2026-08-01",
+      "endDate": "2026-08-31",
+      "budgetHKD": 3000,
+      "spendHKD": 1500,
+      "reach": 12000,
+      "clicks": 340,
+      "targeting": {
+        "age": "25-45歲",
+        "gender": "女性",
+        "location": "香港島",
+        "placement": "IG限時動態+摡文",
+        "interests": "美容護膚、醫美療程"
+      },
+      "notes": "備註"
+    }
+  ]
+}`;
+  el.innerHTML = `
+    <div class="panel">
+      <p style="font-size:13px;margin-top:0">請Claude幫手生成一段JSON（跟返下面格式），貼喺呢度，再撳「匯入」。匯入會<b>整份取代</b>目前客戶嘅名額同廣告資料，如唔肯定可以先匯出備份。</p>
+      <div class="schema">${escapeHtml(schema)}</div>
+      <p style="font-size:12px;color:var(--ink-dim)">貼士：開新Claude對話，將上面格式連同你想更新嘅內容一齊講畀Claude聽，叫佢淨係出返JSON，然後貼落嚟。</p>
+      <textarea class="json" id="importBox" placeholder="貼上JSON..."></textarea>
+      <div class="footer-actions">
+        <button class="primary" id="importBtn">匯入（取代目前客戶資料）</button>
+        <button id="exportBtn">匯出目前客戶JSON</button>
+      </div>
+      <div id="syncMsg"></div>
+    </div>
+  `;
+  document.getElementById('exportBtn').addEventListener('click', () => {
+    document.getElementById('importBox').value = JSON.stringify(currentData, null, 2);
+    showMsg('ok', '已將目前客戶資料放入上面文字框，可以複製出去。');
+  });
+  document.getElementById('importBtn').addEventListener('click', async () => {
+    const raw = document.getElementById('importBox').value;
+    try{
+      const parsed = JSON.parse(raw.replace(/\/\/.*$/gm, ''));
+      if(!parsed.quota || !TYPES.every(t=>parsed.quota[t])) throw new Error('quota部分缺少 static/carousel/reels');
+      parsed.ads = (parsed.ads||[]).map(a => ({...a, id: a.id || uid(), targeting: a.targeting || emptyTargeting()}));
+      currentData = { name: parsed.name || currentData.name, quota: parsed.quota, ads: parsed.ads };
+      const c = clients.find(c=>c.id===currentId);
+      if(c && parsed.name) { c.name = parsed.name; await saveIndex(); }
+      await saveClient(currentId, currentData);
+      renderQuotaTab(); renderAdsTab(); renderClientSelect();
+      document.getElementById('subhead').textContent = `正在編輯：${currentData.name}`;
+      showMsg('ok', '匯入成功。');
+    }catch(e){
+      showMsg('err', '匯入失敗：' + e.message);
+    }
+  });
+}
+function showMsg(type, text){
+  const m = document.getElementById('syncMsg');
+  m.innerHTML = `<div class="msg ${type}">${escapeHtml(text)}</div>`;
+  setTimeout(()=>{ if(m) m.innerHTML=''; }, 4000);
+}
+
+/* ---------- ADMIN PASSCODE GATE ---------- */
+async function initWithGate(){
+  const root = document.getElementById('root');
+  let saved = await getPasscode();
+  if(!saved){
+    root.innerHTML = `<div class="lockwrap"><h1>設定管理密碼</h1>
+      <p class="sub">第一次使用，請設定一個管理密碼（之後編輯資料時需要輸入）。呢個密碼會儲存喺呢個作品內，客戶連結唔會受影響。</p>
+      <input id="setPass" type="password" placeholder="輸入新密碼">
+      <button class="primary" id="setPassBtn" style="width:100%">確認設定</button></div>`;
+    document.getElementById('setPassBtn').addEventListener('click', async () => {
+      const v = document.getElementById('setPass').value;
+      if(!v){ return; }
+      await setPasscode(v);
+      initAdmin();
+    });
+    return;
+  }
+  root.innerHTML = `<div class="lockwrap"><h1>管理登入</h1>
+    <p class="sub">請輸入管理密碼以編輯客戶資料</p>
+    <input id="passInput" type="password" placeholder="密碼">
+    <button class="primary" id="passBtn" style="width:100%">登入</button>
+    <div id="passMsg" class="msg" style="display:none"></div></div>`;
+  document.getElementById('passBtn').addEventListener('click', () => {
+    const v = document.getElementById('passInput').value;
+    if(v === saved){ initAdmin(); }
+    else{
+      const m = document.getElementById('passMsg');
+      m.style.display='block'; m.className='msg err'; m.textContent='密碼錯誤，請再試。';
+    }
+  });
+  document.getElementById('passInput').addEventListener('keydown', e=>{
+    if(e.key==='Enter') document.getElementById('passBtn').click();
+  });
+}
+
+/* ---------- ENTRY ---------- */
+if(isClientView){ renderClientView(); }
+else{ initWithGate(); }
+</script>
