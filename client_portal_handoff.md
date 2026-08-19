@@ -5,6 +5,75 @@ Prototype built inside Claude.ai as a single-file HTML artifact:
 continuing the build in Claude Code and deploying it as a real, free,
 standalone site.
 
+## Status: migrated to Firebase Firestore
+
+`index.html` no longer uses `window.storage` — it now talks to Firestore
+directly via the Firebase JS SDK (compat build, loaded from CDN, no build
+step). The storage functions (`loadIndex`, `saveIndex`, `loadClient`,
+`saveClient`, `deleteClientStorage`, `getPasscode`, `setPasscode`) keep the
+exact same signatures and the same data shape described below — only what's
+underneath them changed. Everything else (UI, tabs, Traditional Chinese
+copy, import/export JSON, client share links) is untouched.
+
+Firestore layout: a single collection `clientPortal`, with one document per
+storage key (`clients-index`, `client:<id>`, `admin-passcode`), each holding
+`{ value: <the same JS object/string that used to be JSON-stringified into
+window.storage> }`.
+
+### Setup before this will actually load/save data
+
+1. Create a free ("Spark" tier) Firebase project at
+   https://console.firebase.google.com, add a Web App to it, and enable
+   **Firestore Database** (not Realtime Database).
+2. Copy `config.example.js` to `config.js` (same folder as `index.html`)
+   and fill in the values from Firebase console → Project settings →
+   General → Your apps → SDK setup and configuration. `config.js` is
+   gitignored — never commit real keys.
+3. **Firestore security rules.** This app still only has the app-level
+   admin passcode gate described below — there's no real Firebase Auth —
+   so the client is talking to Firestore directly with no signed-in user.
+   For the app to work at all, the `clientPortal` collection needs open
+   read/write rules, e.g.:
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /clientPortal/{docId} {
+         allow read, write: if true;
+       }
+     }
+   }
+   ```
+   This is equivalent to the old artifact's `window.storage` trust model
+   (no real auth, just the passcode UI gate) — anyone with your Firestore
+   config could read/write this collection directly. Adding real Firebase
+   Auth is still a good follow-up (see "What needs to change" below, now
+   just item 2).
+4. Deploys straight to Vercel with no framework/bundler: it's still plain
+   HTML/CSS/JS, plus two CDN `<script src>` tags for the Firebase SDK. Set
+   Vercel's project framework to "Other" and it serves `index.html` as the
+   static site root, no build tooling required.
+
+   The one wrinkle: `config.js` is gitignored, so a plain git-connected
+   Vercel deploy (which only sees committed files) won't have it. Two
+   options, in order of preference:
+   - **Recommended — inject it from Vercel env vars at deploy time.** Add
+     the six `firebaseConfig` values as Vercel Environment Variables
+     (Project → Settings → Environment Variables), then add a
+     `vercel.json` with a one-line `buildCommand` that writes `config.js`
+     from those env vars before Vercel serves the static files. This is
+     not a real build step (no bundler/transpiler, output is still the
+     same static HTML/CSS/JS) — it just materializes the one gitignored
+     file at deploy time so real keys never sit in git.
+   - **Simpler, also fine — just commit `config.js` for the deploy.**
+     Firebase's own docs are explicit that Web SDK config values
+     (`apiKey` etc.) identify a project but aren't secret credentials —
+     they're safe to ship in client-side code. Security comes from
+     Firestore Security Rules (see above), not from hiding this file. If
+     that's an acceptable tradeoff, committing `config.js` (removing it
+     from `.gitignore`) is the zero-friction path to a pure static
+     deploy.
+
 ## What it does now
 
 - Multi-client (not tied to one brand) — add/rename/delete clients.
@@ -54,44 +123,20 @@ client:<clientId>    -> {
 admin-passcode        -> string
 ```
 
-## What needs to change for a standalone deploy
+## What's left for a fully standalone deploy
 
-1. **Replace `window.storage` with a real free backend.** Same read/get/set/
-   delete shape, so the rest of the UI code barely changes. Options, cheapest
-   to most capable:
-   - **Firebase Firestore (free "Spark" tier)** — easiest swap, generous
-     free quota, has a JS SDK, supports per-document read/write similar to
-     the key/value pattern above.
-   - **Supabase (free tier)** — Postgres + auto-generated REST API + a real
-     auth system if you want proper client logins later instead of one
-     shared passcode.
-   - **Google Sheets as a database** via a Google Apps Script web app
-     (free) — good if you want to eyeball/edit data in a spreadsheet
-     directly, clunkier for nested JSON like `targeting`.
-2. **Real auth (optional but recommended once public).** The current
+Storage and config-splitting (former items 1 and 3 here) are done — see
+"Status: migrated to Firebase Firestore" above.
+
+1. **Real auth (optional but recommended once public).** The current
    passcode is not secure — anyone who finds the admin URL and guesses/leaks
-   it can edit everything. Supabase Auth or Firebase Auth (free tiers) would
-   let you log in properly and could later give each client their own login
-   instead of an unguessable-link approach.
-3. **Environment/config split.** Move any API keys (Firebase/Supabase
-   config) into a config file that's gitignored if it should stay private,
-   or use env vars if deploying via Vercel/Netlify (their free tiers support
-   this).
-
-## Suggested handoff plan for Claude Code
-
-1. `git init` a new repo, copy `freelance_client_portal.html` in as a
-   starting point (or split it into `index.html` / `style.css` / `app.js`).
-2. Ask Claude Code to swap the storage layer for Firebase or Supabase
-   (pick one — Firestore is the lower-friction start).
-3. Push to GitHub.
-4. Deploy free:
-   - **GitHub Pages** — free static hosting, good enough since all logic is
-     client-side JS calling Firebase/Supabase directly.
-   - **Vercel** or **Netlify** free tier — same idea, slightly nicer preview
-     deploys per git push, easy custom domain later.
-5. Point the "share client link" feature at the new public URL instead of
-   the artifact's own URL.
+   it can edit everything. Firebase Auth (free tier) would let you log in
+   properly and could later give each client their own login instead of an
+   unguessable-link approach.
+2. **Point the "share client link" feature at the deployed URL** once it has
+   one — it already builds the link from `location.origin +
+   location.pathname`, so this happens automatically once deployed; no code
+   change needed.
 
 ## Not carried over from the artifact version
 
