@@ -106,16 +106,29 @@ window.storage> }`.
 > are migrated automatically in-memory on first load, and the admin path
 > writes the migrated shape straight back to Firestore the first time that
 > client is opened — no manual migration needed.
+>
+> Also updated: post quota's "used" count is no longer typed in directly.
+> It's now computed as `quota.<type>.usedBaseline + count(posts of that
+> type)` — `posts` is a dated, titled delivery log that renders as a
+> month calendar (editable in admin, read-only in the public client view).
+> Old `quota.<type>.used` values migrate into `usedBaseline` automatically
+> (same write-back-on-first-open behavior as the ads migration above), so
+> existing totals aren't lost even though there's no historical per-post
+> detail behind them — new usage should be logged through the calendar
+> going forward so titles/dates are tracked.
 
 ```
 clients-index        -> [{ id, name }, ...]
 client:<clientId>    -> {
   name: string,
   quota: {
-    static:   { signed: number, used: number },
-    carousel: { signed: number, used: number },
-    reels:    { signed: number, used: number }
+    static:   { signed: number, usedBaseline: number },
+    carousel: { signed: number, usedBaseline: number },
+    reels:    { signed: number, usedBaseline: number }
   },
+  posts: [
+    { id, date, type: "static" | "carousel" | "reels", title }   // date: "YYYY-MM-DD"
+  ],
   campaigns: [
     {
       id, name,

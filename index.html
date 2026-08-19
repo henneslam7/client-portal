@@ -73,6 +73,31 @@
   .adset-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
   .status-budget{background:#3d2e1a;color:var(--warn);}
   .tablewrap{overflow-x:auto;}
+  .cal-head{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:4px;}
+  .cal-title{font-size:14px;font-weight:600;min-width:110px;text-align:center;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+  .cal-weekdays{margin-bottom:4px;}
+  .cal-weekday{text-align:center;font-size:11px;color:var(--ink-dim);padding:2px 0;}
+  .cal-day{position:relative;min-height:64px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:3px 4px 20px;}
+  .cal-day.empty{background:transparent;border-color:transparent;}
+  .cal-daynum{font-size:10.5px;color:var(--ink-dim);margin-bottom:3px;}
+  .cal-post{font-size:10px;line-height:1.3;border-radius:4px;padding:2px 4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default;}
+  .cal-post[data-editpost]{cursor:pointer;}
+  .cal-post.static{background:var(--accent-dim);color:var(--accent);}
+  .cal-post.carousel{background:#3a3420;color:#f2c866;}
+  .cal-post.reels{background:#33263d;color:#c99af2;}
+  .cal-add{position:absolute;bottom:2px;right:3px;padding:0 5px;font-size:11px;line-height:1.6;border-radius:4px;}
+  .cal-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:11px;color:var(--ink-dim);}
+  .cal-legend-item{display:inline-flex;align-items:center;gap:5px;}
+  .cal-dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+  .cal-dot.static{background:var(--accent);}
+  .cal-dot.carousel{background:#f2c866;}
+  .cal-dot.reels{background:#c99af2;}
+  @media(max-width:640px){
+    .cal-day{min-height:46px;padding:2px 2px 18px;}
+    .cal-post{font-size:9px;padding:1px 3px;}
+    .cal-add{font-size:10px;padding:0 3px;}
+  }
 </style>
 
 <div id="root"></div>
@@ -100,6 +125,7 @@ const OBJECTIVE_KEYS = Object.keys(OBJECTIVES);
 let clients = [];
 let currentId = null;
 let currentData = null;
+let calYear = null, calMonth = null; // calMonth is 0-indexed (Date convention)
 
 const params = new URLSearchParams(location.search);
 const isClientView = params.get('view') === 'client';
@@ -114,10 +140,11 @@ function emptyClientData(name){
     name,
     metaAdAccountId: '',
     quota: {
-      static:   {signed:0, used:0},
-      carousel: {signed:0, used:0},
-      reels:    {signed:0, used:0}
+      static:   {signed:0, usedBaseline:0},
+      carousel: {signed:0, usedBaseline:0},
+      reels:    {signed:0, usedBaseline:0}
     },
+    posts: [],
     campaigns: []
   };
 }
@@ -125,35 +152,82 @@ function emptyTargeting(){
   return { age:'', gender:'不限', location:'', interests:'', placement:'' };
 }
 
-/* Legacy flat "ads" array (pre Campaign > Ad Set > Ad) -> nested campaigns shape */
+/* Legacy flat "ads" array (pre Campaign > Ad Set > Ad) -> nested campaigns shape.
+   Also migrates quota.<type>.used (a manually-typed running total, no per-post
+   detail) into quota.<type>.usedBaseline, and ensures a posts[] log exists —
+   "已用" is now computed as usedBaseline + count of posts of that type, so
+   pre-existing totals aren't lost even though we don't know which specific
+   dates/titles they came from. */
 function migrateClientData(data){
-  if(!data || data.campaigns) return data;
-  const legacyAds = data.ads || [];
-  data.campaigns = legacyAds.map(a => ({
-    id: a.id || uid(),
-    name: a.name || '未命名活動',
-    objective: 'Traffic',
-    notes: '',
-    adsets: [{
-      id: uid(),
-      name: a.name || '未命名廣告組合',
-      startDate: a.startDate || '',
-      endDate: a.endDate || '',
-      budgetHKD: +a.budgetHKD || 0,
-      targeting: a.targeting || emptyTargeting(),
-      ads: [{
+  if(!data) return data;
+  if(!data.campaigns){
+    const legacyAds = data.ads || [];
+    data.campaigns = legacyAds.map(a => ({
+      id: a.id || uid(),
+      name: a.name || '未命名活動',
+      objective: 'Traffic',
+      notes: '',
+      adsets: [{
         id: uid(),
-        name: a.name || '未命名廣告',
-        spendHKD: +a.spendHKD || 0,
-        reach: +a.reach || 0,
-        clicks: +a.clicks || 0,
-        results: +a.clicks || 0,
-        notes: a.notes || ''
+        name: a.name || '未命名廣告組合',
+        startDate: a.startDate || '',
+        endDate: a.endDate || '',
+        budgetHKD: +a.budgetHKD || 0,
+        targeting: a.targeting || emptyTargeting(),
+        ads: [{
+          id: uid(),
+          name: a.name || '未命名廣告',
+          spendHKD: +a.spendHKD || 0,
+          reach: +a.reach || 0,
+          clicks: +a.clicks || 0,
+          results: +a.clicks || 0,
+          notes: a.notes || ''
+        }]
       }]
-    }]
-  }));
-  delete data.ads;
+    }));
+    delete data.ads;
+  }
+  if(!Array.isArray(data.posts)) data.posts = [];
+  TYPES.forEach(t => {
+    const q = data.quota && data.quota[t];
+    if(!q) return;
+    if(q.usedBaseline === undefined){
+      q.usedBaseline = +q.used || 0;
+      delete q.used;
+    }
+  });
   return data;
+}
+
+/* ---------- post calendar (shared by admin + public view) ---------- */
+function computeUsed(data, type){
+  const baseline = +(data.quota?.[type]?.usedBaseline) || 0;
+  const logged = (data.posts||[]).filter(p => p.type === type).length;
+  return baseline + logged;
+}
+
+const WEEKDAY_LABEL = ['日','一','二','三','四','五','六'];
+function renderCalendarGrid(posts, year, month, editable){
+  const startOffset = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const postsByDate = {};
+  (posts||[]).forEach(p => { (postsByDate[p.date] = postsByDate[p.date]||[]).push(p); });
+
+  const cells = [];
+  for(let i=0;i<startOffset;i++) cells.push('<div class="cal-day empty"></div>');
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayPosts = postsByDate[dateStr] || [];
+    const pills = dayPosts.map(p =>
+      `<div class="cal-post ${p.type}"${editable ? ` data-editpost="${p.id}"` : ''} title="${escapeHtml(p.title)}">${escapeHtml(p.title)}</div>`
+    ).join('');
+    const addBtn = editable ? `<button class="cal-add" data-adddate="${dateStr}" title="加貼文紀錄">＋</button>` : '';
+    cells.push(`<div class="cal-day"><div class="cal-daynum">${d}</div>${pills}${addBtn}</div>`);
+  }
+  return `
+    <div class="cal-grid cal-weekdays">${WEEKDAY_LABEL.map(w=>`<div class="cal-weekday">${w}</div>`).join('')}</div>
+    <div class="cal-grid">${cells.join('')}</div>
+  `;
 }
 
 /* ---------- ad set status / ad metrics (shared by admin + public view) ---------- */
@@ -218,15 +292,18 @@ async function renderClientView(){
   }
   const quotaCards = TYPES.map(t=>{
     const q = data.quota[t];
-    const remaining = q.signed - q.used;
-    const pct = q.signed>0 ? Math.min(100,(q.used/q.signed)*100) : 0;
+    const used = computeUsed(data, t);
+    const remaining = q.signed - used;
+    const pct = q.signed>0 ? Math.min(100,(used/q.signed)*100) : 0;
     return `<div class="quota-card">
       <div class="label">${TYPE_LABEL[t]}</div>
       <div class="nums">${remaining} <span>剩餘 / 共 ${q.signed}</span></div>
       <div class="bar ${remaining<0?'over':''}"><div style="width:${pct}%"></div></div>
-      <div class="totals">已使用 ${q.used} / 已簽 ${q.signed}</div>
+      <div class="totals">已使用 ${used} / 已簽 ${q.signed}</div>
     </div>`;
   }).join('');
+
+  if(calYear === null){ const now = new Date(); calYear = now.getFullYear(); calMonth = now.getMonth(); }
 
   const campaigns = data.campaigns || [];
   const campaignCards = campaigns.length ? campaigns.map(c=>{
@@ -283,10 +360,23 @@ async function renderClientView(){
         <div class="section-label" style="margin-top:0">貼文名額</div>
         <div class="grid3">${quotaCards}</div>
       </div>
+      <div class="panel">
+        <div class="cal-head">
+          <button class="small" id="calPrevBtn">‹</button>
+          <div class="cal-title">${calYear}年${calMonth+1}月</div>
+          <button class="small" id="calNextBtn">›</button>
+        </div>
+        ${renderCalendarGrid(data.posts, calYear, calMonth, false)}
+        <div class="cal-legend">
+          ${TYPES.map(t=>`<span class="cal-legend-item"><span class="cal-dot ${t}"></span>${TYPE_LABEL[t]}</span>`).join('')}
+        </div>
+      </div>
       <div class="section-label">Meta 廣告投放</div>
       ${campaignCards}
     </div>
   `;
+  document.getElementById('calPrevBtn').addEventListener('click', () => { calMonth--; if(calMonth<0){calMonth=11;calYear--;} renderClientView(); });
+  document.getElementById('calNextBtn').addEventListener('click', () => { calMonth++; if(calMonth>11){calMonth=0;calYear++;} renderClientView(); });
 }
 
 /* ================= ADMIN VIEW ================= */
@@ -422,36 +512,111 @@ async function initAdmin(){
   }
 }
 
-/* ---------- QUOTA TAB ---------- */
+/* ---------- QUOTA TAB (+ post delivery calendar) ---------- */
 function renderQuotaTab(){
   const el = document.getElementById('tab-quota');
   const cards = TYPES.map(t => {
     const q = currentData.quota[t];
-    const remaining = q.signed - q.used;
-    const pct = q.signed > 0 ? Math.min(100, (q.used/q.signed)*100) : 0;
+    const used = computeUsed(currentData, t);
+    const remaining = q.signed - used;
+    const pct = q.signed > 0 ? Math.min(100, (used/q.signed)*100) : 0;
     const over = remaining < 0;
     return `
       <div class="quota-card">
         <div class="label">${TYPE_LABEL[t]}</div>
         <div class="nums">${remaining} <span>剩餘 / 共 ${q.signed}</span></div>
         <div class="bar ${over?'over':''}"><div style="width:${pct}%"></div></div>
-        <div class="totals">已使用 ${q.used} / 已簽 ${q.signed}</div>
+        <div class="totals">已使用 ${used} / 已簽 ${q.signed}</div>
         <div class="qctrl">
           <span style="font-size:11px;color:var(--ink-dim)">已簽</span>
           <input type="number" min="0" value="${q.signed}" data-type="${t}" data-field="signed">
-          <span style="font-size:11px;color:var(--ink-dim)">已用</span>
-          <input type="number" min="0" value="${q.used}" data-type="${t}" data-field="used">
         </div>
       </div>`;
   }).join('');
-  el.innerHTML = `<div class="panel"><div class="grid3">${cards}</div></div>`;
-  el.querySelectorAll('input').forEach(inp => {
+
+  if(calYear === null){ const now = new Date(); calYear = now.getFullYear(); calMonth = now.getMonth(); }
+
+  el.innerHTML = `
+    <div class="panel"><div class="grid3">${cards}</div></div>
+    <div class="panel">
+      <div class="cal-head">
+        <button class="small" id="calPrevBtn">‹</button>
+        <div class="cal-title">${calYear}年${calMonth+1}月</div>
+        <button class="small" id="calNextBtn">›</button>
+      </div>
+      <p style="font-size:11.5px;color:var(--ink-dim);margin:6px 0 10px">貼文交付日曆：撳日格入面嘅「＋」加一條紀錄（標題＋類型），「已用」會自動計返出嚟。</p>
+      ${renderCalendarGrid(currentData.posts, calYear, calMonth, true)}
+      <div class="cal-legend">
+        ${TYPES.map(t=>`<span class="cal-legend-item"><span class="cal-dot ${t}"></span>${TYPE_LABEL[t]}</span>`).join('')}
+      </div>
+    </div>
+    <div id="postFormHolder"></div>
+  `;
+  el.querySelectorAll('.quota-card input').forEach(inp => {
     inp.addEventListener('change', async () => {
       const t = inp.dataset.type, f = inp.dataset.field;
       currentData.quota[t][f] = Math.max(0, parseInt(inp.value)||0);
       await saveClient(currentId, currentData);
       renderQuotaTab();
     });
+  });
+  document.getElementById('calPrevBtn').addEventListener('click', () => { calMonth--; if(calMonth<0){calMonth=11;calYear--;} renderQuotaTab(); });
+  document.getElementById('calNextBtn').addEventListener('click', () => { calMonth++; if(calMonth>11){calMonth=0;calYear++;} renderQuotaTab(); });
+  wireCalendarEvents(el);
+}
+
+function wireCalendarEvents(el){
+  el.querySelectorAll('[data-adddate]').forEach(b => b.addEventListener('click', () => showPostForm(b.dataset.adddate, null)));
+  el.querySelectorAll('[data-editpost]').forEach(b => b.addEventListener('click', () => {
+    const post = currentData.posts.find(p => p.id === b.dataset.editpost);
+    if(post) showPostForm(post.date, post.id);
+  }));
+}
+
+function showPostForm(dateStr, postId){
+  currentData.posts = currentData.posts || [];
+  const post = postId ? currentData.posts.find(p=>p.id===postId) : { id: uid(), date: dateStr, type: 'static', title: '' };
+  const holder = document.getElementById('postFormHolder');
+  holder.innerHTML = `
+    <div class="panel">
+      <div class="section-label" style="margin-top:0">貼文交付紀錄</div>
+      <div class="field-row">
+        <div><label>日期</label><input type="date" id="f_post_date" value="${post.date}"></div>
+        <div><label>類型</label>
+          <select id="f_post_type">
+            ${TYPES.map(t=>`<option value="${t}" ${post.type===t?'selected':''}>${TYPE_LABEL[t]}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom:8px">
+        <label style="font-size:11px;color:var(--ink-dim)">標題</label>
+        <input id="f_post_title" style="width:100%" placeholder="例：8月品牌故事輪播圖" value="${escapeHtml(post.title)}">
+      </div>
+      <div class="footer-actions">
+        <button class="primary" id="savePostBtn">儲存</button>
+        <button id="cancelPostBtn">取消</button>
+        ${postId ? '<button class="danger" id="delPostBtn">刪除</button>' : ''}
+      </div>
+    </div>
+  `;
+  document.getElementById('cancelPostBtn').addEventListener('click', () => holder.innerHTML='');
+  document.getElementById('savePostBtn').addEventListener('click', async () => {
+    post.date = document.getElementById('f_post_date').value || dateStr;
+    post.type = document.getElementById('f_post_type').value;
+    post.title = document.getElementById('f_post_title').value.trim() || '未命名貼文';
+    const idx = currentData.posts.findIndex(p=>p.id===post.id);
+    if(idx>=0) currentData.posts[idx]=post; else currentData.posts.push(post);
+    await saveClient(currentId, currentData);
+    holder.innerHTML='';
+    renderQuotaTab();
+  });
+  const delBtn = document.getElementById('delPostBtn');
+  if(delBtn) delBtn.addEventListener('click', async () => {
+    if(!confirm('確定刪除呢條貼文紀錄？')) return;
+    currentData.posts = currentData.posts.filter(p=>p.id!==post.id);
+    await saveClient(currentId, currentData);
+    holder.innerHTML='';
+    renderQuotaTab();
   });
 }
 
@@ -738,10 +903,18 @@ function renderSyncTab(){
   const schema = `{
   "name": "客戶名稱",
   "quota": {
-    "static":   { "signed": 10, "used": 4 },
-    "carousel": { "signed": 6,  "used": 2 },
-    "reels":    { "signed": 4,  "used": 1 }
+    "static":   { "signed": 10, "usedBaseline": 0 },
+    "carousel": { "signed": 6,  "usedBaseline": 0 },
+    "reels":    { "signed": 4,  "usedBaseline": 0 }
   },
+  "posts": [
+    {
+      "id": "如果係更新現有紀錄，保留原本id；新紀錄可以唔寫",
+      "date": "2026-08-05",
+      "type": "carousel",
+      "title": "8月品牌故事輪播圖"
+    }
+  ],
   "campaigns": [
     {
       "id": "如果係更新現有活動，保留原本id；新活動可以唔寫",
@@ -783,6 +956,8 @@ function renderSyncTab(){
       <p style="font-size:13px;margin-top:0">請Claude幫手生成一段JSON（跟返下面格式），貼喺呢度，再撳「匯入」。匯入會<b>整份取代</b>目前客戶嘅名額同廣告資料，如唔肯定可以先匯出備份。</p>
       <div class="schema">${escapeHtml(schema)}</div>
       <p style="font-size:12px;color:var(--ink-dim)">
+        <b>quota.usedBaseline</b>係「已用」嘅起始底數（一般keep 0就得）；實際「已用」會自動 = usedBaseline + 呢個月曆入面同類型嘅posts數量，唔使自己計。<br>
+        <b>posts</b>係貼文交付日曆嘅紀錄，type要係 static/carousel/reels 其中一個。<br>
         <b>objective</b>可以係：Awareness（觸及/知名度）、Traffic（流量）、Engagement（互動）、Leads（潛在客戶）、Sales（轉換/銷售）、AppPromotion（應用程式推廣）。<br>
         <b>results</b>視乎objective：Traffic=連結點擊、Engagement=互動次數、Leads=名單數、Sales=轉換次數、AppPromotion=安裝次數；Awareness唔使填，會自動用返reach計。
       </p>
@@ -804,6 +979,17 @@ function renderSyncTab(){
     try{
       const parsed = JSON.parse(raw.replace(/\/\/.*$/gm, ''));
       if(!parsed.quota || !TYPES.every(t=>parsed.quota[t])) throw new Error('quota部分缺少 static/carousel/reels');
+      const quota = {};
+      TYPES.forEach(t => {
+        const q = parsed.quota[t] || {};
+        quota[t] = { signed: +q.signed || 0, usedBaseline: +(q.usedBaseline !== undefined ? q.usedBaseline : q.used) || 0 };
+      });
+      const posts = (parsed.posts||[]).map(p => ({
+        id: p.id || uid(),
+        date: p.date || '',
+        type: TYPES.includes(p.type) ? p.type : 'static',
+        title: p.title || '未命名貼文'
+      }));
       const campaigns = (parsed.campaigns||[]).map(c => ({
         id: c.id || uid(),
         name: c.name || '未命名活動',
@@ -827,7 +1013,7 @@ function renderSyncTab(){
           }))
         }))
       }));
-      currentData = { name: parsed.name || currentData.name, metaAdAccountId: parsed.metaAdAccountId !== undefined ? parsed.metaAdAccountId : (currentData.metaAdAccountId||''), quota: parsed.quota, campaigns };
+      currentData = { name: parsed.name || currentData.name, metaAdAccountId: parsed.metaAdAccountId !== undefined ? parsed.metaAdAccountId : (currentData.metaAdAccountId||''), quota, posts, campaigns };
       const c = clients.find(c=>c.id===currentId);
       if(c && parsed.name) { c.name = parsed.name; await saveIndex(); }
       await saveClient(currentId, currentData);
