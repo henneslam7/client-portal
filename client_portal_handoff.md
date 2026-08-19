@@ -100,6 +100,13 @@ window.storage> }`.
   must be replaced.
 
 ### Storage keys currently used (all `shared: true`)
+
+> Updated: ads are now a real Campaign → Ad Set → Ad hierarchy (matching
+> Meta's own structure) instead of a flat list. Old flat-`ads` client docs
+> are migrated automatically in-memory on first load, and the admin path
+> writes the migrated shape straight back to Firestore the first time that
+> client is opened — no manual migration needed.
+
 ```
 clients-index        -> [{ id, name }, ...]
 client:<clientId>    -> {
@@ -109,14 +116,30 @@ client:<clientId>    -> {
     carousel: { signed: number, used: number },
     reels:    { signed: number, used: number }
   },
-  ads: [
+  campaigns: [
     {
       id, name,
-      status: "Scheduled" | "Launched" | "Ended",
-      startDate, endDate,          // "YYYY-MM-DD"
-      budgetHKD, spendHKD, reach, clicks,
-      targeting: { age, gender, location, placement, interests },
-      notes
+      objective: "Awareness" | "Traffic" | "Engagement" | "Leads" | "Sales" | "AppPromotion",
+      notes,
+      adsets: [
+        {
+          id, name,
+          startDate, endDate,          // "YYYY-MM-DD"; status (Scheduled/Launched/Ended/
+                                        // BudgetExhausted) is computed, not stored
+          budgetHKD,
+          targeting: { age, gender, location, placement, interests },
+          ads: [
+            {
+              id, name,
+              spendHKD, reach, clicks,
+              results,                 // meaning depends on objective (leads, conversions,
+                                        // engagements, installs...); unused for Awareness,
+                                        // which derives its result (and CPM) from reach
+              notes
+            }
+          ]
+        }
+      ]
     }
   ]
 }
