@@ -3,10 +3,10 @@
 // and configuration → "Config"). config.js is gitignored — never commit
 // real Firebase keys.
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyC_tCWgEfKJufnuSnf0etj115rGYRvWRdk",
+  authDomain: "client-portal-cp101.firebaseapp.com",
+  projectId: "client-portal-cp101",
+  storageBucket: "client-portal-cp101.firebasestorage.app",
+  messagingSenderId: "604771325410",
+  appId: "1:604771325410:web:2db3c444a06ffadefe15bb"
 };
