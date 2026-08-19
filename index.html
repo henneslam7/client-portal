@@ -106,11 +106,13 @@ const isClientView = params.get('view') === 'client';
 const clientViewId = params.get('id');
 
 function uid(){ return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function subheadText(data){ return `正在編輯：${data.name}${data.metaAdAccountId ? ' · Meta帳戶：'+data.metaAdAccountId : ''}`; }
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
 function emptyClientData(name){
   return {
     name,
+    metaAdAccountId: '',
     quota: {
       static:   {signed:0, used:0},
       carousel: {signed:0, used:0},
@@ -299,6 +301,7 @@ function adminShell(){
         <button id="renameClientBtn">重新命名</button>
         <button id="deleteClientBtn" class="danger">刪除</button>
         <button id="shareBtn">分享客戶連結</button>
+        <button id="metaAcctBtn">設定Meta廣告帳戶ID</button>
       </div>
       <div id="shareBoxHolder"></div>
       <div id="app" style="display:none">
@@ -350,6 +353,14 @@ function adminShell(){
       document.getElementById('subhead').textContent = '未有客戶資料。';
     }
   });
+  document.getElementById('metaAcctBtn').addEventListener('click', async () => {
+    if(!currentId) return;
+    const v = prompt(`「${currentData.name}」嘅Meta廣告帳戶ID（例如 act_1234567890，喺Meta Ads Manager網址或「帳戶概覽」度搵到）：`, currentData.metaAdAccountId || '');
+    if(v === null) return;
+    currentData.metaAdAccountId = v.trim();
+    await saveClient(currentId, currentData);
+    document.getElementById('subhead').textContent = subheadText(currentData);
+  });
   document.getElementById('shareBtn').addEventListener('click', () => {
     if(!currentId) return;
     const base = location.origin + location.pathname;
@@ -392,7 +403,7 @@ async function selectClient(id){
   document.getElementById('shareBoxHolder').innerHTML = '';
   document.getElementById('app').style.display = clients.length ? 'block' : 'none';
   document.getElementById('noClient').style.display = clients.length ? 'none' : 'block';
-  document.getElementById('subhead').textContent = clients.length ? `正在編輯：${currentData.name}` : '未有客戶資料。';
+  document.getElementById('subhead').textContent = clients.length ? subheadText(currentData) : '未有客戶資料。';
   renderClientSelect();
   renderQuotaTab();
   renderAdsTab();
@@ -816,12 +827,12 @@ function renderSyncTab(){
           }))
         }))
       }));
-      currentData = { name: parsed.name || currentData.name, quota: parsed.quota, campaigns };
+      currentData = { name: parsed.name || currentData.name, metaAdAccountId: parsed.metaAdAccountId !== undefined ? parsed.metaAdAccountId : (currentData.metaAdAccountId||''), quota: parsed.quota, campaigns };
       const c = clients.find(c=>c.id===currentId);
       if(c && parsed.name) { c.name = parsed.name; await saveIndex(); }
       await saveClient(currentId, currentData);
       renderQuotaTab(); renderAdsTab(); renderClientSelect();
-      document.getElementById('subhead').textContent = `正在編輯：${currentData.name}`;
+      document.getElementById('subhead').textContent = subheadText(currentData);
       showMsg('ok', '匯入成功。');
     }catch(e){
       showMsg('err', '匯入失敗：' + e.message);
