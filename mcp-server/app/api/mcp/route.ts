@@ -148,10 +148,17 @@ const handler = createMcpHandler((server) => {
   );
 }, {});
 
-const verifyToken = async (_req: Request, bearerToken?: string): Promise<AuthInfo | undefined> => {
-  if (!bearerToken) return undefined;
-  if (!process.env.MCP_AUTH_TOKEN || bearerToken !== process.env.MCP_AUTH_TOKEN) return undefined;
-  return { token: bearerToken, scopes: ['portal'], clientId: 'client-portal-admin' };
+const verifyToken = async (req: Request, bearerToken?: string): Promise<AuthInfo | undefined> => {
+  // Claude's custom-connector UI has no plain "paste a bearer token" field —
+  // only a URL and optional OAuth Client ID/Secret. So accept the token
+  // either as a real Authorization: Bearer header (for clients that do
+  // support it) or as a ?token= query param on the connector URL itself
+  // (what the current claude.ai UI actually lets you configure).
+  const url = new URL(req.url);
+  const token = bearerToken || url.searchParams.get('token') || undefined;
+  if (!token) return undefined;
+  if (!process.env.MCP_AUTH_TOKEN || token !== process.env.MCP_AUTH_TOKEN) return undefined;
+  return { token, scopes: ['portal'], clientId: 'client-portal-admin' };
 };
 
 const authHandler = withMcpAuth(handler, verifyToken, {
