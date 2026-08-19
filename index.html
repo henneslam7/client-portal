@@ -68,7 +68,14 @@
 
 <div id="root"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="config.js"></script>
 <script>
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const COLLECTION = 'clientPortal';
+
 const TYPES = ['static','carousel','reels'];
 const TYPE_LABEL = {static:'靜態圖', carousel:'輪播圖', reels:'Reels / 影片'};
 const STATUS_LABEL = {Scheduled:'排程中', Launched:'已上線', Ended:'已結束'};
@@ -98,23 +105,23 @@ function emptyTargeting(){
   return { age:'', gender:'不限', location:'', interests:'', placement:'' };
 }
 
-/* ---------- storage (shared, so client links can read it) ---------- */
+/* ---------- storage (Firestore, shared, so client links can read it) ---------- */
 async function loadIndex(){
-  try{ const r = await window.storage.get('clients-index', true); return r ? JSON.parse(r.value) : []; }
+  try{ const snap = await db.collection(COLLECTION).doc('clients-index').get(); return snap.exists ? (snap.data().value || []) : []; }
   catch(e){ return []; }
 }
-async function saveIndex(){ await window.storage.set('clients-index', JSON.stringify(clients), true); }
+async function saveIndex(){ await db.collection(COLLECTION).doc('clients-index').set({value: clients}); }
 async function loadClient(id){
-  try{ const r = await window.storage.get('client:'+id, true); return r ? JSON.parse(r.value) : null; }
+  try{ const snap = await db.collection(COLLECTION).doc('client:'+id).get(); return snap.exists ? snap.data().value : null; }
   catch(e){ return null; }
 }
-async function saveClient(id, data){ await window.storage.set('client:'+id, JSON.stringify(data), true); }
-async function deleteClientStorage(id){ try{ await window.storage.delete('client:'+id, true); }catch(e){} }
+async function saveClient(id, data){ await db.collection(COLLECTION).doc('client:'+id).set({value: data}); }
+async function deleteClientStorage(id){ try{ await db.collection(COLLECTION).doc('client:'+id).delete(); }catch(e){} }
 async function getPasscode(){
-  try{ const r = await window.storage.get('admin-passcode', true); return r ? r.value : null; }
+  try{ const snap = await db.collection(COLLECTION).doc('admin-passcode').get(); return snap.exists ? snap.data().value : null; }
   catch(e){ return null; }
 }
-async function setPasscode(v){ await window.storage.set('admin-passcode', v, true); }
+async function setPasscode(v){ await db.collection(COLLECTION).doc('admin-passcode').set({value: v}); }
 
 /* ================= CLIENT (READ-ONLY, PUBLIC) VIEW ================= */
 async function renderClientView(){
