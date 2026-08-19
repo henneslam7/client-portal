@@ -126,21 +126,22 @@ const mcpHandler = createMcpHandler((server) => {
     'update_quota',
     {
       title: 'Update post quota',
-      description: "Update a client's post quota (signed/used counts) for static, carousel, or reels post types.",
+      description:
+        "Update a client's post quota for static, carousel, or reels post types. \"signed\" is the total quota. \"usedBaseline\" is a baseline offset added to however many posts[] calendar entries of that type already exist for this client -- the portal computes the displayed \"used\" count as usedBaseline + count(posts of that type), it is never stored as a plain number. Set usedBaseline to 0 to reset a client's usage back to whatever their posts[] calendar log alone accounts for.",
       inputSchema: z.object({
         clientId: z.string(),
         type: z.enum(['static', 'carousel', 'reels']),
         signed: z.number().optional(),
-        used: z.number().optional(),
+        usedBaseline: z.number().optional(),
       }),
     },
-    async ({ clientId, type, signed, used }) => {
+    async ({ clientId, type, signed, usedBaseline }) => {
       const { ref, exists, data } = await loadClientDoc(clientId);
       if (!exists) return { content: [{ type: 'text', text: '找唔到呢個client。' }], isError: true };
       data.quota = data.quota || {};
-      data.quota[type] = data.quota[type] || { signed: 0, used: 0 };
+      data.quota[type] = data.quota[type] || { signed: 0, usedBaseline: 0 };
       if (signed !== undefined) data.quota[type].signed = signed;
-      if (used !== undefined) data.quota[type].used = used;
+      if (usedBaseline !== undefined) data.quota[type].usedBaseline = usedBaseline;
       await ref.set({ value: data });
       return { content: [{ type: 'text', text: `已更新「${data.name}」嘅${type}名額。` }] };
     }
