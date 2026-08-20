@@ -1,4 +1,5 @@
 <meta charset="UTF-8">
+<link rel="icon" href="favicon.png">
 <style>
   :root{
     --bg:#15171b; --panel:#1d2026; --panel2:#23262e; --line:#2c3038;
@@ -10,6 +11,7 @@
   .wrap{max-width:960px;margin:0 auto;padding:20px 16px 60px;}
   h1{font-size:20px;font-weight:700;letter-spacing:-0.01em;margin:0 0 2px;}
   .sub{color:var(--ink-dim);font-size:13px;margin:0 0 20px;}
+  .brand-logo{display:inline-block;height:40px;width:auto;margin:4px 0 14px;}
   .toprow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px;}
   select, input, textarea, button{
     font-family:inherit;background:var(--panel2);color:var(--ink);
@@ -354,6 +356,7 @@ async function renderClientView(){
 
   root.innerHTML = `
     <div class="wrap">
+      <img class="brand-logo" src="logo.png" alt="">
       <h1>${escapeHtml(data.name)} — 貼文與廣告進度</h1>
       <p class="sub">最後更新資料由服務方提供，僅供參考</p>
       <div class="panel">
@@ -383,6 +386,7 @@ async function renderClientView(){
 function adminShell(){
   document.getElementById('root').innerHTML = `
     <div class="wrap">
+      <img class="brand-logo" src="logo.png" alt="">
       <h1>客戶管理後台</h1>
       <p class="sub" id="subhead">載入中…</p>
       <div class="toprow">
@@ -1036,7 +1040,7 @@ async function initWithGate(){
   const root = document.getElementById('root');
   let saved = await getPasscode();
   if(!saved){
-    root.innerHTML = `<div class="lockwrap"><h1>設定管理密碼</h1>
+    root.innerHTML = `<div class="lockwrap"><img class="brand-logo" src="logo.png" alt=""><h1>設定管理密碼</h1>
       <p class="sub">第一次使用，請設定一個管理密碼（之後編輯資料時需要輸入）。呢個密碼會儲存喺呢個作品內，客戶連結唔會受影響。</p>
       <input id="setPass" type="password" placeholder="輸入新密碼">
       <button class="primary" id="setPassBtn" style="width:100%">確認設定</button></div>`;
@@ -1048,7 +1052,7 @@ async function initWithGate(){
     });
     return;
   }
-  root.innerHTML = `<div class="lockwrap"><h1>管理登入</h1>
+  root.innerHTML = `<div class="lockwrap"><img class="brand-logo" src="logo.png" alt=""><h1>管理登入</h1>
     <p class="sub">請輸入管理密碼以編輯客戶資料</p>
     <input id="passInput" type="password" placeholder="密碼">
     <button class="primary" id="passBtn" style="width:100%">登入</button>
